@@ -193,7 +193,7 @@ ScanFileInUserMode(
 	ComputeHash((PUCHAR)buffer,bytesRead,&pHash,&cbHash);
 	
 	msg->size = cbHash;
-	RtlCopyMemory(msg->buffer, &pHash, min(msg->size, SCANNER_BUFFER));
+	RtlCopyMemory(msg->buffer, pHash, min(msg->size, SCANNER_BUFFER));
 	replyLength = sizeof(ReplyMsg);
 
 
