@@ -12,11 +12,14 @@ DWORD WorkerThread(WorkerContext * Context)
 	ReplyMsg repmsg;
 	while (true) {
 		result = GetQueuedCompletionStatus(IocpCore, &dwTrBytes, &ulKey, &pOvlp, INFINITE);
-		msg = CONTAINING_RECORD(pOvlp, ScannerGetMsg, ovlp); //ovlp¿¡¼­ [ Header |  ScannerMsg  | ovlp   ] povlp¿¡¼­ ±¸Á¶Ã¼³»ÀÇ ovlp ¿Í ¸ÂÃç¼­ »óÀ§ ±¸Á¶Ã¼¸¦ Ã£´Â ¸ÅÅ©·Î 
+		msg = CONTAINING_RECORD(pOvlp, ScannerGetMsg, ovlp); //ovlpì—ì„œ [ Header |  ScannerMsg  | ovlp   ] povlpì—ì„œ êµ¬ì¡°ì²´ë‚´ì˜ ovlp ì™€ ë§ì¶°ì„œ ìƒìœ„ êµ¬ì¡°ì²´ë¥¼ ì°¾ëŠ” ë§¤í¬ë¡œ 
 		printf("Recevied message size %d\n", pOvlp->InternalHigh);
 
-		printf("%s\n", msg->msg.buffer);
 
+		for (int i = 0; i <msg->msg.size ; i++)
+		{
+			printf("%02x", msg->msg.buffer[i]);
+		}
 		repmsg.header.MessageId = msg->header.MessageId;
 		repmsg.header.Status = 0;
 		repmsg.safetoOpen = true;
