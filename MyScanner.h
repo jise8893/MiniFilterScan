@@ -2,7 +2,9 @@
 #include <fltKernel.h>
 #include <dontuse.h>
 #include <suppress.h>
+#include <bcrypt.h>
 #define SCANNER_BUFFER 1024
+
 #pragma push(1)
 class ScannerMsg
 {

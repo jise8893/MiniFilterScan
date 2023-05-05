@@ -1,9 +1,79 @@
-
 #include "MyScanner.h"
 PFLT_FILTER FilterHandle = NULL;
 PFLT_PORT ServerPort = NULL;
 PFLT_PORT cP = NULL;
+typedef unsigned char* PBYTE;
 
+NTSTATUS ComputeHash(PUCHAR Data, ULONG DataSize,PUCHAR* pHash,PULONG cbHash)
+{
+	BCRYPT_ALG_HANDLE hAlg = NULL;
+	BCRYPT_HASH_HANDLE hHash = NULL;
+	PUCHAR pHashObject = NULL;
+
+	ULONG cbHashObject = 0;
+	
+	ULONG cbData = 0;
+	NTSTATUS status = STATUS_SUCCESS;
+	DbgBreakPoint();
+
+	status = BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_SHA256_ALGORITHM, NULL, 0);
+	if (!NT_SUCCESS(status)) {
+		goto Exit;
+	}
+
+	status = BCryptGetProperty(hAlg, BCRYPT_OBJECT_LENGTH, (PBYTE)&cbHashObject, sizeof(ULONG), &cbData, 0);
+	if (!NT_SUCCESS(status)) {
+		goto Exit;
+	}
+
+
+	pHashObject = (PUCHAR)ExAllocatePool2(POOL_FLAG_NON_PAGED, cbHashObject, 'htuo');
+	if (pHashObject == NULL) {
+		status = STATUS_INSUFFICIENT_RESOURCES;
+		goto Exit;
+	}
+
+
+	status = BCryptGetProperty(hAlg, BCRYPT_HASH_LENGTH, (PBYTE)cbHash, sizeof(ULONG), &cbData, 0);
+
+	*pHash= (PUCHAR)ExAllocatePool2(POOL_FLAG_NON_PAGED, cbHashObject, 'htua');
+
+	if (*pHash == NULL) {
+		status = STATUS_INSUFFICIENT_RESOURCES;
+		goto Exit;
+	}
+
+
+	status = BCryptCreateHash(hAlg, &hHash, pHashObject, cbHashObject, NULL, 0, 0);
+	if (!NT_SUCCESS(status)) {
+		goto Exit;
+	}
+
+	status = BCryptHashData(hHash, Data, DataSize, 0);
+	if (!NT_SUCCESS(status)) {
+		goto Exit;
+	}
+
+	status = BCryptFinishHash(hHash, *pHash, *cbHash, 0);
+	if (!NT_SUCCESS(status)) {
+		goto Exit;
+	}
+
+Exit:
+	if (hHash) {
+		BCryptDestroyHash(hHash);
+	}
+
+	if (hAlg) {
+		BCryptCloseAlgorithmProvider(hAlg, 0);
+	}
+
+	if (pHashObject) {
+		ExFreePoolWithTag(pHashObject, 'htuo');
+	}
+	
+	return status;
+}
 const UNICODE_STRING ScannerExtensionsToScan[] =
 { RTL_CONSTANT_STRING(L"doc"),
   RTL_CONSTANT_STRING(L"txt"),
@@ -25,7 +95,7 @@ ScannerpCheckExtension(
 		return FALSE;
 	}
 
-	
+
 
 	ext = ScannerExtensionsToScan;
 
@@ -40,7 +110,7 @@ ScannerpCheckExtension(
 
 	return FALSE;
 }
-FLT_PREOP_CALLBACK_STATUS ScanPreCreate(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID *CompletionContext)
+FLT_PREOP_CALLBACK_STATUS ScanPreCreate(PFLT_CALLBACK_DATA Data, PCFLT_RELATED_OBJECTS FltObjects, PVOID* CompletionContext)
 {
 	UNREFERENCED_PARAMETER(Data);
 	UNREFERENCED_PARAMETER(FltObjects);
@@ -62,18 +132,23 @@ ScanFileInUserMode(
 	PFLT_VOLUME volume;
 	ULONG length;
 	FLT_VOLUME_PROPERTIES volumeProps;
-	PVOID buffer=NULL;
+	PVOID buffer = NULL;
 	LARGE_INTEGER offset;
 	ULONG bytesRead;
 	ULONG replyLength;
 	ScannerMsg* msg;
+
+	ULONG cbHash = 0;
+	PUCHAR pHash = NULL;
+
+
 	UNREFERENCED_PARAMETER(SafeToOpen);
 	UNREFERENCED_PARAMETER(pwFilePath);
 	UNREFERENCED_PARAMETER(cbFilePath);
 	*SafeToOpen = true;
 	if (cP == NULL)
 	{
-		
+
 		return STATUS_SUCCESS;
 	}
 
@@ -100,7 +175,7 @@ ScanFileInUserMode(
 	{
 		return STATUS_INSUFFICIENT_RESOURCES;
 	}
-	msg =(ScannerMsg*) ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(ScannerMsg), 'nacS');
+	msg = (ScannerMsg*)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(ScannerMsg), 'nacS');
 	if (msg == NULL)
 	{
 		return STATUS_INSUFFICIENT_RESOURCES;
@@ -115,20 +190,22 @@ ScanFileInUserMode(
 	{
 		return STATUS_SUCCESS;
 	}
-	msg->size = bytesRead;
-	RtlCopyMemory(msg->buffer, buffer, min(msg->size,SCANNER_BUFFER));
+	ComputeHash((PUCHAR)buffer,bytesRead,&pHash,&cbHash);
+	
+	msg->size = cbHash;
+	RtlCopyMemory(msg->buffer, &pHash, min(msg->size, SCANNER_BUFFER));
 	replyLength = sizeof(ReplyMsg);
 
+
 	status = FltSendMessage(FilterHandle, &cP, msg, sizeof(ScannerMsg), msg, &replyLength, NULL);
-	
+
 	if (status == STATUS_SUCCESS)
 	{
 		DbgPrint("Success send Msg\r\n");
-		DbgBreakPoint();
 	}
 	else
 	{
-		DbgPrint("Failed send Msg %x\r\n",status);
+		DbgPrint("Failed send Msg %x\r\n", status);
 	}
 	ExFreePool(msg);
 
@@ -141,7 +218,7 @@ ScanPostCreate(
 	__in PCFLT_RELATED_OBJECTS FltObjects,
 	__in_opt PVOID CompletionContext,
 	__in FLT_POST_OPERATION_FLAGS Flags
-){
+) {
 	NTSTATUS status;
 	PFLT_FILE_NAME_INFORMATION nameInfo;
 	BOOLEAN scanFile = NULL;
@@ -175,7 +252,7 @@ ScanPostCreate(
 	FltReleaseFileNameInformation(nameInfo);
 	if (scanFile) {
 		DbgPrint("PostCreate %ws \r\n", wFilePath);
-		ScanFileInUserMode(wFilePath,cbFilePath,FltObjects->Instance,FltObjects->FileObject,&SafeToOpen);
+		ScanFileInUserMode(wFilePath, cbFilePath, FltObjects->Instance, FltObjects->FileObject, &SafeToOpen);
 	}
 
 
@@ -225,7 +302,7 @@ ScannerPortConnect(
 	UNREFERENCED_PARAMETER(ConnectionContext);
 	UNREFERENCED_PARAMETER(SizeOfContext);
 	UNREFERENCED_PARAMETER(ConnectionCookie);
-	
+
 	return STATUS_SUCCESS;
 }
 
@@ -245,7 +322,7 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING pRe
 	OBJECT_ATTRIBUTES ObjAtt;
 	PSECURITY_DESCRIPTOR SecDes;
 	UNREFERENCED_PARAMETER(pRegistryPath);
-	
+
 	status = FltRegisterFilter(DriverObject, &FilterRegistration, &FilterHandle);
 	if (!NT_SUCCESS(status))
 	{
@@ -259,9 +336,9 @@ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING pRe
 	}
 	InitializeObjectAttributes(&ObjAtt, &uniString, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, SecDes);
 	status = FltCreateCommunicationPort(FilterHandle, &ServerPort, &ObjAtt, NULL, ScannerPortConnect, ScannerPortDisconnect, NULL, 1);
-	
+
 	FltFreeSecurityDescriptor(SecDes);
-	
+
 	if (!NT_SUCCESS(status))
 	{
 		return status;
