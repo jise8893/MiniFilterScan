@@ -14,8 +14,7 @@ NTSTATUS ComputeHash(PUCHAR Data, ULONG DataSize,PUCHAR* pHash,PULONG cbHash)
 	
 	ULONG cbData = 0;
 	NTSTATUS status = STATUS_SUCCESS;
-	DbgBreakPoint();
-
+	
 	status = BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_SHA256_ALGORITHM, NULL, 0);
 	if (!NT_SUCCESS(status)) {
 		goto Exit;
@@ -136,11 +135,11 @@ ScanFileInUserMode(
 	LARGE_INTEGER offset;
 	ULONG bytesRead;
 	ULONG replyLength;
-	ScannerMsg* msg;
-
+	ScannerMsg* msg=NULL;
+	PBOOLEAN replybuffer;
+	
 	ULONG cbHash = 0;
 	PUCHAR pHash = NULL;
-
 
 	UNREFERENCED_PARAMETER(SafeToOpen);
 	UNREFERENCED_PARAMETER(pwFilePath);
@@ -195,20 +194,23 @@ ScanFileInUserMode(
 	msg->size = cbHash;
 	RtlCopyMemory(msg->buffer, pHash, min(msg->size, SCANNER_BUFFER));
 	replyLength = sizeof(ReplyMsg);
+	
 
-
+	
 	status = FltSendMessage(FilterHandle, &cP, msg, sizeof(ScannerMsg), msg, &replyLength, NULL);
-
+	replybuffer = (PBOOLEAN)msg;
 	if (status == STATUS_SUCCESS)
 	{
-		DbgPrint("Success send Msg\r\n");
+		*SafeToOpen = *replybuffer;
+		
+		DbgPrint("Success send Msg %d\r\n",SafeToOpen);
 	}
 	else
 	{
 		DbgPrint("Failed send Msg %x\r\n", status);
 	}
 	ExFreePool(msg);
-
+	FltFreePoolAlignedWithTag(Instance,buffer,'nacS');
 	return status;
 
 }
@@ -254,7 +256,16 @@ ScanPostCreate(
 		DbgPrint("PostCreate %ws \r\n", wFilePath);
 		ScanFileInUserMode(wFilePath, cbFilePath, FltObjects->Instance, FltObjects->FileObject, &SafeToOpen);
 	}
-
+	
+	if (!SafeToOpen)
+	{
+		FltCancelFileOpen(FltObjects->Instance, FltObjects->FileObject);
+		Data->IoStatus.Status = STATUS_ACCESS_DENIED;
+		Data->IoStatus.Information = 0;
+		
+		DbgPrint("Protected Mailicous Data\n");
+		
+	}
 
 	return FLT_POSTOP_FINISHED_PROCESSING;
 }
