@@ -65,14 +65,14 @@ MyScanner.sys = 1,,
 ;
 
 [Strings]
-ProviderString          = "MiniFilter-Example"
-ServiceDescription      = "MiniFilter-Example"
+ProviderString          = "jise8893"
+ServiceDescription      = "MiniFilterScan"
 ServiceName             = "MyScanner"
 DriverName              = "MyScanner"
 DiskId1                 = "MiniFilter-Example Device Installation Disk"
 
 ;Instances specific information.
-DefaultInstance         = "MiniFilter-Example"
-Instance1.Name          = "MiniFilter-Example"
+DefaultInstance         = "MiniFilterScan"
+Instance1.Name          = "MiniFilterScan"
 Instance1.Altitude      = "370000"
 Instance1.Flags         = 0x0
