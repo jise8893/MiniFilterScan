@@ -69,7 +69,7 @@ ProviderString          = "jise8893"
 ServiceDescription      = "MiniFilterScan"
 ServiceName             = "MyScanner"
 DriverName              = "MyScanner"
-DiskId1                 = "MiniFilterScan Device Installation Disk"
+DiskId1                 = "MiniFilter-Example Device Installation Disk"
 
 ;Instances specific information.
 DefaultInstance         = "MiniFilterScan"
